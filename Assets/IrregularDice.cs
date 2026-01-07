@@ -11,6 +11,7 @@ public class IrregularDice : MonoBehaviour
     private int sideLanded = -1;
     private Vector3 initialPosition;
 
+    [Header("Side Detection - Each sphere represents a side of the dice")]
     [SerializeField]
     public SphereCollider sphere1, sphere2, sphere3, sphere4, sphere5, sphere6;
 
@@ -30,9 +31,21 @@ public class IrregularDice : MonoBehaviour
     [Header("Sampling Settings")]
     public int samplePoints = 10000;
 
+    [Header("Visualization")]
+    public bool showVoidVisualization = true;
+    public Color diceColor = new Color(0.5f, 0.5f, 1f, 0.5f);
+    public Color voidColor = new Color(1f, 0f, 0f, 0.8f);
+    public Color centerOfMassColor = Color.green;
+
     private Rigidbody rb;
     private Bounds diceBounds;
     private MeshCollider meshCollider;
+    private bool physicsCalculated = false;
+
+    private GameObject voidSphere;
+    private GameObject centerOfMassSphere;
+    private Material diceMaterial;
+    private Material originalMaterial;
 
     void Start()
     {
@@ -59,7 +72,7 @@ public class IrregularDice : MonoBehaviour
 
         if (rb == null)
         {
-            Debug.LogError("IrregularDice: Rigidbody component not found!");
+            Debug.LogError("IrregularDice:  Rigidbody component not found!");
             return;
         }
 
@@ -83,7 +96,109 @@ public class IrregularDice : MonoBehaviour
             diceBounds.SetMinMax(boundsMin, boundsMax);
         }
 
+        SetupVisualization();
         CalculateMassDistribution();
+    }
+
+    void SetupVisualization()
+    {
+        SetupTransparentDice();
+
+        if (showVoidVisualization && enableVoid)
+        {
+            CreateVoidSphere();
+        }
+
+        CreateCenterOfMassSphere();
+    }
+
+    void SetupTransparentDice()
+    {
+        MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
+        if (meshRenderer != null)
+        {
+            originalMaterial = meshRenderer.material;
+
+            diceMaterial = new Material(Shader.Find("Standard"));
+            diceMaterial.SetFloat("_Mode", 3);
+            diceMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            diceMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            diceMaterial.SetInt("_ZWrite", 0);
+            diceMaterial.DisableKeyword("_ALPHATEST_ON");
+            diceMaterial.EnableKeyword("_ALPHABLEND_ON");
+            diceMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            diceMaterial.renderQueue = 3000;
+            diceMaterial.color = diceColor;
+
+            meshRenderer.material = diceMaterial;
+        }
+    }
+
+    void CreateVoidSphere()
+    {
+        voidSphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        voidSphere.name = "VoidVisualization";
+        voidSphere.transform.SetParent(transform);
+        voidSphere.transform.localPosition = voidCenter;
+        voidSphere.transform.localScale = Vector3.one * voidRadius * 2f;
+
+        Collider voidCollider = voidSphere.GetComponent<Collider>();
+        if (voidCollider != null)
+        {
+            Destroy(voidCollider);
+        }
+
+        MeshRenderer voidRenderer = voidSphere.GetComponent<MeshRenderer>();
+        if (voidRenderer != null)
+        {
+            Material voidMaterial = new Material(Shader.Find("Standard"));
+            voidMaterial.SetFloat("_Mode", 3);
+            voidMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            voidMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            voidMaterial.SetInt("_ZWrite", 0);
+            voidMaterial.DisableKeyword("_ALPHATEST_ON");
+            voidMaterial.EnableKeyword("_ALPHABLEND_ON");
+            voidMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            voidMaterial.renderQueue = 3001;
+            voidMaterial.color = voidColor;
+
+            voidRenderer.material = voidMaterial;
+        }
+    }
+
+    void CreateCenterOfMassSphere()
+    {
+        centerOfMassSphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        centerOfMassSphere.name = "CenterOfMassVisualization";
+        centerOfMassSphere.transform.SetParent(transform);
+        centerOfMassSphere.transform.localPosition = Vector3.zero;
+        centerOfMassSphere.transform.localScale = Vector3.one * 0.1f;
+
+        Collider comCollider = centerOfMassSphere.GetComponent<Collider>();
+        if (comCollider != null)
+        {
+            Destroy(comCollider);
+        }
+
+        MeshRenderer comRenderer = centerOfMassSphere.GetComponent<MeshRenderer>();
+        if (comRenderer != null)
+        {
+            Material comMaterial = new Material(Shader.Find("Standard"));
+            comMaterial.SetFloat("_Mode", 0);
+            comMaterial.color = centerOfMassColor;
+            comMaterial.EnableKeyword("_EMISSION");
+            comMaterial.SetColor("_EmissionColor", centerOfMassColor);
+
+            comRenderer.material = comMaterial;
+        }
+    }
+
+    void UpdateCenterOfMassVisualization()
+    {
+        if (centerOfMassSphere != null && rb != null)
+        {
+            centerOfMassSphere.transform.localPosition = rb.centerOfMass;
+        }
     }
 
     void Update()
@@ -103,7 +218,7 @@ public class IrregularDice : MonoBehaviour
             secondsSinceStopped += Time.deltaTime;
         }
 
-        if (secondsSinceStopped > 4 && sideLanded != -1)
+        if (secondsSinceStopped > 4)
         {
             transform.position = initialPosition;
             transform.rotation = Random.rotation;
@@ -145,14 +260,14 @@ public class IrregularDice : MonoBehaviour
             }
         }
 
-        // Safety check:  if no valid points found, use default physics
         if (validPointCount == 0)
         {
-            Debug.LogWarning("IrregularDice: No valid sample points found. Using default physics.  " +
+            Debug.LogWarning("IrregularDice:  No valid sample points found. Using default physics.  " +
                            "Check that MeshCollider is set up correctly and bounds are appropriate.");
             rb.mass = totalMass;
             rb.centerOfMass = Vector3.zero;
             physicsCalculated = false;
+            UpdateCenterOfMassVisualization();
             return;
         }
 
@@ -160,7 +275,6 @@ public class IrregularDice : MonoBehaviour
 
         Vector3 centerOfMass = centerOfMassSum / validPointCount;
 
-        // Validate center of mass before applying
         if (IsValidVector(centerOfMass))
         {
             rb.centerOfMass = centerOfMass;
@@ -173,7 +287,6 @@ public class IrregularDice : MonoBehaviour
 
         Vector3 inertiaTensor = CalculateInertiaTensor(validPoints, validPointCount, centerOfMass, totalMass);
 
-        // Validate inertia tensor before applying
         if (IsValidVector(inertiaTensor) && inertiaTensor.x > 0 && inertiaTensor.y > 0 && inertiaTensor.z > 0)
         {
             rb.inertiaTensor = inertiaTensor;
@@ -185,7 +298,6 @@ public class IrregularDice : MonoBehaviour
 
         Quaternion inertiaTensorRotation = CalculateInertiaTensorRotation(validPoints, validPointCount, centerOfMass, totalMass);
 
-        // Validate quaternion before applying
         if (IsValidQuaternion(inertiaTensorRotation))
         {
             rb.inertiaTensorRotation = inertiaTensorRotation;
@@ -197,6 +309,8 @@ public class IrregularDice : MonoBehaviour
         }
 
         physicsCalculated = true;
+
+        UpdateCenterOfMassVisualization();
 
         Debug.Log($"Irregular Hollow Dice Physics Calculated:");
         Debug.Log($"  Mass: {totalMass:F4} kg");
@@ -219,7 +333,6 @@ public class IrregularDice : MonoBehaviour
 
     bool IsInsideMesh(Vector3 point)
     {
-        // If no mesh collider, assume all points within bounds are valid
         if (meshCollider == null)
         {
             return true;
@@ -272,7 +385,6 @@ public class IrregularDice : MonoBehaviour
             Izz += massPerPoint * (r.x * r.x + r.y * r.y);
         }
 
-        // Ensure minimum values to prevent issues
         Ixx = Mathf.Max(Ixx, 0.001f);
         Iyy = Mathf.Max(Iyy, 0.001f);
         Izz = Mathf.Max(Izz, 0.001f);
@@ -420,6 +532,49 @@ public class IrregularDice : MonoBehaviour
         return Quaternion.LookRotation(forward.normalized, up.normalized);
     }
 
+    public void SetVisualizationEnabled(bool enabled)
+    {
+        showVoidVisualization = enabled;
+
+        if (voidSphere != null)
+        {
+            voidSphere.SetActive(enabled && enableVoid);
+        }
+
+        if (centerOfMassSphere != null)
+        {
+            centerOfMassSphere.SetActive(enabled);
+        }
+    }
+
+    public void SetDiceTransparency(float alpha)
+    {
+        diceColor.a = alpha;
+
+        if (diceMaterial != null)
+        {
+            diceMaterial.color = diceColor;
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (diceMaterial != null)
+        {
+            Destroy(diceMaterial);
+        }
+
+        if (voidSphere != null)
+        {
+            Destroy(voidSphere);
+        }
+
+        if (centerOfMassSphere != null)
+        {
+            Destroy(centerOfMassSphere);
+        }
+    }
+
     void OnDrawGizmosSelected()
     {
         Bounds drawBounds;
@@ -443,18 +598,15 @@ public class IrregularDice : MonoBehaviour
             drawBounds.SetMinMax(boundsMin, boundsMax);
         }
 
-        // Draw bounds
         Gizmos.color = Color.white;
         Gizmos.DrawWireCube(transform.position + drawBounds.center, drawBounds.size);
 
-        // Draw void
         if (enableVoid)
         {
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(transform.position + voidCenter, voidRadius);
         }
 
-        // Draw center of mass
         Rigidbody rigidBody = GetComponent<Rigidbody>();
         if (rigidBody != null)
         {
