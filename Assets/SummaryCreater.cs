@@ -25,6 +25,12 @@ public class SummaryCreater : MonoBehaviour
     public void addSideCount(int side)
     {
         total++;
+        if (side < 0 || side > sideCounts.Length)
+        {
+            Debug.Log($"Invalid side received: {side}");
+            Debug.LogError($"Invalid side received: {side}");
+            throw new System.Exception("anyad");
+        }
         sideCounts[side - 1]++;
         totalText.text = $"Total: {total}";
         summaryText.text = $"1: {((float)sideCounts[0] / (float)total * 100f).ToString("F1")}%\n" +
