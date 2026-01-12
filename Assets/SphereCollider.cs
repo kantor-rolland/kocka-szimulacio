@@ -17,6 +17,7 @@ public class SphereCollider : MonoBehaviour
         
     }
 
+    // oldal erzekeles
     private void OnTriggerEnter(Collider other)
     {
         dice.setSideLanded(side);

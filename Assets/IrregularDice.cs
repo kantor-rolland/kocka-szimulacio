@@ -66,6 +66,7 @@ public class IrregularDice : MonoBehaviour
         transform.rotation = Random.rotation; // kezdeskor veletlenszeru forgatas
         lastYPosition = transform.position.y;
 
+
         // oldalerzekelok
         sphere1.dice = this;
         sphere1.side = 1;
